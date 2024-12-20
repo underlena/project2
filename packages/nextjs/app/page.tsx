@@ -1,71 +1,103 @@
 "use client";
+import { useEffect, useState } from "react";
+import { useContractWrite, useContractRead, useAccount } from "wagmi";
+import { YourContractABI } from "../../../abi/YourContractABI";
 
-import Link from "next/link";
-import type { NextPage } from "next";
-import { useAccount } from "wagmi";
-import { BugAntIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
-import { Address } from "~~/components/scaffold-eth";
+export default function VotingPage() {
+    const { address } = useAccount();
+    const [optionsList, setOptionsList] = useState<number[]>([]);
+    const [selectedChoice, setSelectedChoice] = useState<number | null>(null);
 
-const Home: NextPage = () => {
-  const { address: connectedAddress } = useAccount();
+    const { data: isVotingOpen } = useContractRead({
+        address: "0x5fbdb2315678afecb367f032d93f642f64180aa3",
+        abi: YourContractABI,
+        functionName: "votingActive",
+    });
 
-  return (
-    <>
-      <div className="flex items-center flex-col flex-grow pt-10">
-        <div className="px-5">
-          <h1 className="text-center">
-            <span className="block text-2xl mb-2">Welcome to</span>
-            <span className="block text-4xl font-bold">Scaffold-ETH 2</span>
-          </h1>
-          <div className="flex justify-center items-center space-x-2 flex-col sm:flex-row">
-            <p className="my-2 font-medium">Connected Address:</p>
-            <Address address={connectedAddress} />
-          </div>
-          <p className="text-center text-lg">
-            Get started by editing{" "}
-            <code className="italic bg-base-300 text-base font-bold max-w-full break-words break-all inline-block">
-              packages/nextjs/app/page.tsx
-            </code>
-          </p>
-          <p className="text-center text-lg">
-            Edit your smart contract{" "}
-            <code className="italic bg-base-300 text-base font-bold max-w-full break-words break-all inline-block">
-              YourContract.sol
-            </code>{" "}
-            in{" "}
-            <code className="italic bg-base-300 text-base font-bold max-w-full break-words break-all inline-block">
-              packages/hardhat/contracts
-            </code>
-          </p>
-        </div>
+    const { data: votingOptions } = useContractRead({
+        address: "0x5fbdb2315678afecb367f032d93f642f64180aa3",
+        abi: YourContractABI,
+        functionName: "getOptions",
+    });
 
-        <div className="flex-grow bg-base-300 w-full mt-16 px-8 py-12">
-          <div className="flex justify-center items-center gap-12 flex-col sm:flex-row">
-            <div className="flex flex-col bg-base-100 px-10 py-10 text-center items-center max-w-xs rounded-3xl">
-              <BugAntIcon className="h-8 w-8 fill-secondary" />
-              <p>
-                Tinker with your smart contract using the{" "}
-                <Link href="/debug" passHref className="link">
-                  Debug Contracts
-                </Link>{" "}
-                tab.
-              </p>
+    const { data: voteCount } = useContractRead({
+        address: "0x5fbdb2315678afecb367f032d93f642f64180aa3",
+        abi: YourContractABI,
+        functionName: "getVotes",
+        args: [selectedChoice || 0],
+    });
+
+    const { write: registerVoter } = useContractWrite({
+        address: "0x5fbdb2315678afecb367f032d93f642f64180aa3",
+        abi: YourContractABI,
+        functionName: "addVoter",
+    });
+
+    const { write: castVote } = useContractWrite({
+        address: "0x5fbdb2315678afecb367f032d93f642f64180aa3",
+        abi: YourContractABI,
+        functionName: "vote",
+    });
+
+    useEffect(() => {
+        if (votingOptions) {
+            setOptionsList(votingOptions as number[]);
+        }
+    }, [votingOptions]);
+
+    const handleCastVote = () => {
+        if (selectedChoice !== null) {
+            castVote({ args: [selectedChoice] });
+        }
+    };
+
+    return (
+        <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4">
+            <div className="bg-white shadow-lg rounded-lg p-6 w-full max-w-md">
+                <h1 className="text-3xl font-bold text-center mb-6">Voting App</h1>
+                {isVotingOpen ? (
+                    <div>
+                        <h2 className="text-xl font-semibold mb-4">Options:</h2>
+                        <ul className="space-y-2">
+                            {optionsList.map((option) => (
+                                <li key={option} className="flex items-center">
+                                    <label className="flex items-center space-x-2">
+                                        <input
+                                            type="radio"
+                                            name="option"
+                                            value={option}
+                                            onChange={() => setSelectedChoice(option)}
+                                            className="form-radio text-blue-500"
+                                        />
+                                        <span className="text-gray-700">Option {option}</span>
+                                    </label>
+                                </li>
+                            ))}
+                        </ul>
+                        <button
+                            onClick={handleCastVote}
+                            className="mt-6 w-full bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 transition"
+                        >
+                            Vote
+                        </button>
+                    </div>
+                ) : (
+                    <p className="text-center text-gray-500">Voting is not active.</p>
+                )}
+                {voteCount !== undefined && (
+                    <p className="mt-4 text-center text-gray-700">
+                        Votes for selected option: <span className="font-bold">{voteCount.toString()}</span>
+                    </p>
+                )}
+                {address && (
+                    <button
+                        onClick={() => registerVoter({ args: [address] })}
+                        className="mt-4 w-full bg-green-500 text-white py-2 rounded-lg hover:bg-green-600 transition"
+                    >
+                        Register as Voter
+                    </button>
+                )}
             </div>
-            <div className="flex flex-col bg-base-100 px-10 py-10 text-center items-center max-w-xs rounded-3xl">
-              <MagnifyingGlassIcon className="h-8 w-8 fill-secondary" />
-              <p>
-                Explore your local transactions with the{" "}
-                <Link href="/blockexplorer" passHref className="link">
-                  Block Explorer
-                </Link>{" "}
-                tab.
-              </p>
-            </div>
-          </div>
         </div>
-      </div>
-    </>
-  );
-};
-
-export default Home;
+    );
+}
